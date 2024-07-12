@@ -79,6 +79,16 @@ type AssertionMaker interface {
 	MakeAssertion(req *IdpAuthnRequest, session *Session) error
 }
 
+// ResponseWriter is an interface used by IdentityProvider to write
+// SAML authentication response. The default implementation is DefaultResponseWriter,
+// which is used if ResponseWriter is not specified.
+type ResponseWriter interface {
+	// Write writes HTTP response with a SAML authentication response
+	// message containing a SAML assertion. The response format depends
+	// on a SAML response binding configured between IDP and SP.
+	Write(w http.ResponseWriter, req *IdpAuthnRequest) error
+}
+
 // IdentityProvider implements the SAML Identity Provider role (IDP).
 //
 // An identity provider receives SAML assertion requests and responds
@@ -103,6 +113,7 @@ type IdentityProvider struct {
 	SSOURL                  url.URL
 	LogoutURL               url.URL
 	ServiceProviderProvider ServiceProviderProvider
+	ResponseWriter          ResponseWriter
 	SessionProvider         SessionProvider
 	AssertionMaker          AssertionMaker
 	SignatureMethod         string
@@ -253,7 +264,12 @@ func (idp *IdentityProvider) ServeSSO(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	if err := req.WriteResponse(w); err != nil {
+
+	responseWriter := idp.ResponseWriter
+	if responseWriter == nil {
+		responseWriter = DefaultResponseWriter{}
+	}
+	if err := responseWriter.Write(w, req); err != nil {
 		idp.Logger.Printf("failed to write response: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -327,7 +343,11 @@ func (idp *IdentityProvider) ServeIDPInitiated(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := req.WriteResponse(w); err != nil {
+	responseWriter := idp.ResponseWriter
+	if responseWriter == nil {
+		responseWriter = DefaultResponseWriter{}
+	}
+	if err := responseWriter.Write(w, req); err != nil {
 		idp.Logger.Printf("failed to write response: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -921,9 +941,14 @@ func (req *IdpAuthnRequest) PostBinding() (IdpAuthnRequestForm, error) {
 	return form, nil
 }
 
-// WriteResponse writes the `Response` to the http.ResponseWriter. If
-// `Response` is not already set, it calls MakeResponse to produce it.
-func (req *IdpAuthnRequest) WriteResponse(w http.ResponseWriter) error {
+// DefaultResponseWriter is the default response interface
+// for the identity provider.
+type DefaultResponseWriter struct {
+}
+
+// Write implements DefaultResponseWriter and writes HTTP response with SAML authentication
+// response, which is an HTML POST form with a SAML assertion.
+func (DefaultResponseWriter) Write(w http.ResponseWriter, req *IdpAuthnRequest) error {
 	form, err := req.PostBinding()
 	if err != nil {
 		return err

@@ -138,6 +138,7 @@ func NewIdentityProviderTest(t *testing.T, opts ...idpTestOpts) *IdentityProvide
 				return nil
 			},
 		},
+		ResponseWriter: &DefaultResponseWriter{},
 	}
 
 	// apply the test options
@@ -789,7 +790,7 @@ func TestIDPWriteResponse(t *testing.T) {
 	assert.Check(t, err)
 
 	w := httptest.NewRecorder()
-	err = req.WriteResponse(w)
+	err = test.IDP.ResponseWriter.Write(w, &req)
 	assert.Check(t, err)
 	assert.Check(t, is.Equal(200, w.Code))
 	golden.Assert(t, w.Body.String(), t.Name()+"response.html")
