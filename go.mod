@@ -4,7 +4,6 @@ go 1.23.0
 
 require (
 	github.com/beevik/etree v1.5.0
-	github.com/crewjam/httperr v0.2.0
 	github.com/dchest/uniuri v1.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/go-cmp v0.6.0
