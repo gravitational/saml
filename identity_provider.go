@@ -112,6 +112,7 @@ type IdentityProvider struct {
 	Intermediates           []*x509.Certificate
 	MetadataURL             url.URL
 	SSOURL                  url.URL
+	LoginURL                url.URL
 	LogoutURL               url.URL
 	ServiceProviderProvider ServiceProviderProvider
 	ResponseWriter          ResponseWriter
