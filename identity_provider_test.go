@@ -126,7 +126,7 @@ func NewIdentityProviderTest(t *testing.T, opts ...idpTestOpts) *IdentityProvide
 		MetadataURL: mustParseURL("https://idp.example.com/saml/metadata"),
 		SSOURL:      mustParseURL("https://idp.example.com/saml/sso"),
 		ServiceProviderProvider: &mockServiceProviderProvider{
-			GetServiceProviderFunc: func(r *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
+			GetServiceProviderFunc: func(_ *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
 				if serviceProviderID == test.SP.MetadataURL.String() {
 					return test.SP.Metadata(), nil
 				}
@@ -134,7 +134,7 @@ func NewIdentityProviderTest(t *testing.T, opts ...idpTestOpts) *IdentityProvide
 			},
 		},
 		SessionProvider: &mockSessionProvider{
-			GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+			GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 				return nil
 			},
 		},
@@ -242,9 +242,10 @@ func TestIDPHTTPCanHandleMetadataRequest(t *testing.T) {
 func TestIDPCanHandleRequestWithNewSession(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
-			fmt.Fprintf(w, "RelayState: %s\nSAMLRequest: %s",
+		GetSessionFunc: func(w http.ResponseWriter, _ *http.Request, req *IdpAuthnRequest) *Session {
+			_, err := fmt.Fprintf(w, "RelayState: %s\nSAMLRequest: %s",
 				req.RelayState, req.RequestBuffer)
+			assert.NilError(t, err)
 			return nil
 		},
 	}
@@ -268,7 +269,7 @@ func TestIDPCanHandleRequestWithNewSession(t *testing.T) {
 func TestIDPCanHandleRequestWithExistingSession(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{
 				ID:       "f00df00df00d",
 				UserName: "alice",
@@ -293,7 +294,7 @@ func TestIDPCanHandleRequestWithExistingSession(t *testing.T) {
 func TestIDPCanHandlePostRequestWithExistingSession(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{
 				ID:       "f00df00df00d",
 				UserName: "alice",
@@ -322,7 +323,7 @@ func TestIDPCanHandlePostRequestWithExistingSession(t *testing.T) {
 func TestIDPRejectsInvalidRequest(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			panic("not reached")
 		},
 	}
@@ -799,8 +800,9 @@ func TestIDPWriteResponse(t *testing.T) {
 func TestIDPIDPInitiatedNewSession(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
-			fmt.Fprintf(w, "RelayState: %s", req.RelayState)
+		GetSessionFunc: func(w http.ResponseWriter, _ *http.Request, req *IdpAuthnRequest) *Session {
+			_, err := fmt.Fprintf(w, "RelayState: %s", req.RelayState)
+			assert.NilError(t, err)
 			return nil
 		},
 	}
@@ -815,7 +817,7 @@ func TestIDPIDPInitiatedNewSession(t *testing.T) {
 func TestIDPIDPInitiatedExistingSession(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{
 				ID:       "f00df00df00d",
 				UserName: "alice",
@@ -833,7 +835,7 @@ func TestIDPIDPInitiatedExistingSession(t *testing.T) {
 func TestIDPIDPInitiatedBadServiceProvider(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{
 				ID:       "f00df00df00d",
 				UserName: "alice",
@@ -850,7 +852,7 @@ func TestIDPIDPInitiatedBadServiceProvider(t *testing.T) {
 func TestIDPCanHandleUnencryptedResponse(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{ID: "f00df00df00d", UserName: "alice"}
 		},
 	}
@@ -861,7 +863,7 @@ func TestIDPCanHandleUnencryptedResponse(t *testing.T) {
 		&metadata)
 	assert.Check(t, err)
 	test.IDP.ServiceProviderProvider = &mockServiceProviderProvider{
-		GetServiceProviderFunc: func(r *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
+		GetServiceProviderFunc: func(_ *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
 			if serviceProviderID == "https://gitlab.example.com/users/saml/metadata" {
 				return &metadata, nil
 			}
@@ -1028,7 +1030,7 @@ func TestIDPRequestedAttributes(t *testing.T) {
 func TestIDPNoDestination(t *testing.T) {
 	test := NewIdentityProviderTest(t, applyKey)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
+		GetSessionFunc: func(_ http.ResponseWriter, _ *http.Request, _ *IdpAuthnRequest) *Session {
 			return &Session{ID: "f00df00df00d", UserName: "alice"}
 		},
 	}
@@ -1037,7 +1039,7 @@ func TestIDPNoDestination(t *testing.T) {
 	err := xml.Unmarshal(golden.Get(t, "TestIDPNoDestination_idp_metadata.xml"), &metadata)
 	assert.Check(t, err)
 	test.IDP.ServiceProviderProvider = &mockServiceProviderProvider{
-		GetServiceProviderFunc: func(r *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
+		GetServiceProviderFunc: func(_ *http.Request, serviceProviderID string) (*EntityDescriptor, error) {
 			if serviceProviderID == "https://gitlab.example.com/users/saml/metadata" {
 				return &metadata, nil
 			}
@@ -1068,9 +1070,10 @@ func TestIDPNoDestination(t *testing.T) {
 func TestIDPRejectDecompressionBomb(t *testing.T) {
 	test := NewIdentityProviderTest(t)
 	test.IDP.SessionProvider = &mockSessionProvider{
-		GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *IdpAuthnRequest) *Session {
-			fmt.Fprintf(w, "RelayState: %s\nSAMLRequest: %s",
+		GetSessionFunc: func(w http.ResponseWriter, _ *http.Request, req *IdpAuthnRequest) *Session {
+			_, err := fmt.Fprintf(w, "RelayState: %s\nSAMLRequest: %s",
 				req.RelayState, req.RequestBuffer)
+			assert.NilError(t, err)
 			return nil
 		},
 	}
