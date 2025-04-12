@@ -8,13 +8,13 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strconv"
-	"text/template"
 	"time"
 
 	"github.com/beevik/etree"
@@ -119,6 +119,7 @@ type IdentityProvider struct {
 	AssertionMaker          AssertionMaker
 	SignatureMethod         string
 	ValidDuration           *time.Duration
+	ResponseFormTemplate    *template.Template
 }
 
 // Metadata returns the metadata structure for this identity provider.
@@ -962,6 +963,16 @@ func (req *IdpAuthnRequest) PostBinding() (IdpAuthnRequestForm, error) {
 	return form, nil
 }
 
+var defaultResponseFormTemplate = template.Must(template.New("saml-post-form").Parse(`<html>` +
+	`<form method="post" action="{{.URL}}" id="SAMLResponseForm">` +
+	`<input type="hidden" name="SAMLResponse" value="{{.SAMLResponse}}" />` +
+	`<input type="hidden" name="RelayState" value="{{.RelayState}}" />` +
+	`<input id="SAMLSubmitButton" type="submit" value="Continue" />` +
+	`</form>` +
+	`<script>document.getElementById('SAMLSubmitButton').style.visibility='hidden';</script>` +
+	`<script>document.getElementById('SAMLResponseForm').submit();</script>` +
+	`</html>`))
+
 // DefaultResponseWriter is the default response interface
 // for the identity provider.
 type DefaultResponseWriter struct {
@@ -975,15 +986,28 @@ func (DefaultResponseWriter) Write(w http.ResponseWriter, req *IdpAuthnRequest) 
 		return err
 	}
 
-	tmpl := template.Must(template.New("saml-post-form").Parse(`<html>` +
-		`<form method="post" action="{{.URL}}" id="SAMLResponseForm">` +
-		`<input type="hidden" name="SAMLResponse" value="{{.SAMLResponse}}" />` +
-		`<input type="hidden" name="RelayState" value="{{.RelayState}}" />` +
-		`<input id="SAMLSubmitButton" type="submit" value="Continue" />` +
-		`</form>` +
-		`<script>document.getElementById('SAMLSubmitButton').style.visibility='hidden';</script>` +
-		`<script>document.getElementById('SAMLResponseForm').submit();</script>` +
-		`</html>`))
+	buf := bytes.NewBuffer(nil)
+	if err := defaultResponseFormTemplate.Execute(buf, form); err != nil {
+		return err
+	}
+	if _, err := io.Copy(w, buf); err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteResponse writes the `Response` to the http.ResponseWriter. If
+// `Response` is not already set, it calls MakeResponse to produce it.
+func (req *IdpAuthnRequest) WriteResponse(w http.ResponseWriter) error {
+	form, err := req.PostBinding()
+	if err != nil {
+		return err
+	}
+
+	tmpl := req.IDP.ResponseFormTemplate
+	if tmpl == nil {
+		tmpl = defaultResponseFormTemplate
+	}
 
 	buf := bytes.NewBuffer(nil)
 	if err := tmpl.Execute(buf, form); err != nil {
