@@ -6,12 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"text/template"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
+	template "github.com/DataDog/datadog-agent/pkg/template/text"
 	"github.com/zenazn/goji/web"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/crewjam/saml"
 )

@@ -1,8 +1,9 @@
 module github.com/crewjam/saml
 
-go 1.19
+go 1.25.0
 
 require (
+	github.com/DataDog/datadog-agent/pkg/template v0.77.2
 	github.com/beevik/etree v1.2.0
 	github.com/crewjam/httperr v0.2.0
 	github.com/dchest/uniuri v1.2.0
